@@ -5,5 +5,7 @@ void initSensors();
 float getDistanceCM();
 bool isWaterFlowing();
 bool isPersonNear();
-
+int getDecibel();
+int getDistance();
+void measure();
 #endif

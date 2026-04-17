@@ -17,20 +17,97 @@ REFRESH_MS = 800       # 자동 새로고침 간격 (ms)
 WARNING_SEC = 10       # config.h 와 동일하게 맞추세요
 LOCK_SEC    = 20
 
-# ── 세션 상태 초기화 ────────────────────────────────────────────────────
-def _init_state():
-    defaults = {
-        "logs":        [],          # {"time", "event", "elapsed"} 리스트
-        "last_event":  "idle",      # idle | flowing | warning | lock
-        "elapsed":     0,
-        "valve_open":  True,
-        "total_events": {"warning": 0, "lock": 0},
-    }
-    for k, v in defaults.items():
-        if k not in st.session_state:
-            st.session_state[k] = v
 
-_init_state()
+@st.fragment(run_every="1s")
+def display_data():
+
+    col_sonar, col_sound = st.columns(2)
+
+    with col_sonar:
+        st.subheader("소나")
+        
+        if st.session_state.sonar_data:
+            df_sonar = pd.DataFrame(st.session_state.sonar_data)
+        
+            if "time" in df_sonar.columns:
+                df_sonar = df_sonar.set_index("time")
+            
+            # 수액의 출렁거림(노이즈)을 보정하기 위해 이동평균선 적용합니다!!!
+            if "distance" in df_sonar.columns:
+                df_sonar["distance_ma"] = df_sonar["distance"].rolling(window=5).mean()
+            
+            plot_df_sonar = df_sonar.tail(60).copy()
+            plot_df_sonar = plot_df_sonar[["distance", "distance_ma"]]
+            plot_df_sonar = plot_df_sonar.rename(columns={
+                "distance" : "거리",
+                "distance_ma": "이동 평균"
+            })
+
+            st.line_chart(
+                plot_df_sonar,
+                color=['#EEEEEE', "#58A4E7"],
+                y_label= "수액 잔량 (cm)"
+            )
+
+            
+            current_value = df_sonar["distance"].values[-1]
+            max_value = df_sonar["distance"].max()
+            min_value = df_sonar["distance"].min()
+            avg_value = df_sonar["distance"].mean()
+
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("현재", current_value)
+            m2.metric("최대", max_value)
+            m3.metric("최소", min_value)
+            m4.metric("평균", f"{avg_value:0.0f}")
+
+            with st.expander("수액 센서 원본 데이터 보기"):
+                st.dataframe(df_sonar.sort_index(ascending=False))
+    
+    with col_sound:
+        st.subheader("이상 소음")
+        
+        if st.session_state.sound_data:
+            df_sound = pd.DataFrame(st.session_state.sound_data)
+        
+            if "time" in df_sound.columns:
+                df_sound = df_sound.set_index("time")
+            
+            plot_df_sound = df_sound.tail(60)
+            st.line_chart(plot_df_sound, color="#C2D640", y_label="decibel")
+            
+            current_value = df_sound["decibel"].values[-1]
+            max_value = df_sound["decibel"].max()
+            min_value = df_sound["decibel"].min()
+            avg_value = df_sound["decibel"].mean()
+
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("현재", current_value)
+            m2.metric("최대", max_value)
+            m3.metric("최소", min_value)
+            m4.metric("평균", f"{avg_value:0.0f}")
+
+            with st.expander("소리 센서 원본 데이터 보기"):
+                st.dataframe(df_sound.sort_index(ascending=False))
+
+        
+
+display_data()
+
+# # ── 세션 상태 초기화 ────────────────────────────────────────────────────
+# def _init_state():
+#     defaults = {
+#         "logs":        [],          # {"time", "event", "elapsed"} 리스트
+#         "last_event":  "idle",      # idle | flowing | warning | lock
+#         "elapsed":     0,
+#         "valve_open":  True,
+#         "total_events": {"warning": 0, "lock": 0},
+#     }
+#     for k, v in defaults.items():
+#         if k not in st.session_state:
+#             st.session_state[k] = v
+
+# _init_state()
 
 # ── 시리얼 읽기 ─────────────────────────────────────────────────────────
 def read_serial(ser: serial.Serial | None):
